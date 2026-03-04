@@ -53,6 +53,10 @@ import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
 type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl';
 
+// Simple PIN gate — change this PIN to whatever you want
+const ACCESS_PIN = '1234';
+const PIN_STORAGE_KEY = 'party-games-access';
+
 // Available games list
 const GAMES: GameInfo[] = [
   {
@@ -85,6 +89,73 @@ const GAMES: GameInfo[] = [
 ];
 
 export default function App() {
+  const [hasAccess, setHasAccess] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+
+  // Check if already authenticated (session storage for web, memory for native)
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      try {
+        if (sessionStorage.getItem(PIN_STORAGE_KEY) === 'granted') {
+          setHasAccess(true);
+        }
+      } catch {}
+    }
+  }, []);
+
+  const handlePinSubmit = () => {
+    if (pinInput === ACCESS_PIN) {
+      setHasAccess(true);
+      setPinError(false);
+      if (Platform.OS === 'web') {
+        try { sessionStorage.setItem(PIN_STORAGE_KEY, 'granted'); } catch {}
+      }
+    } else {
+      setPinError(true);
+      setPinInput('');
+    }
+  };
+
+  if (!hasAccess) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" />
+          <View style={styles.content}>
+            <Text style={styles.title}>🔒</Text>
+            <Text style={styles.subtitle}>Enter PIN to continue</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, styles.codeInput]}
+                placeholder="PIN"
+                placeholderTextColor="#8b8b9e"
+                value={pinInput}
+                onChangeText={(t) => { setPinInput(t); setPinError(false); }}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={8}
+                onSubmitEditing={handlePinSubmit}
+              />
+              {pinError && (
+                <Text style={{ color: '#ef4444', textAlign: 'center', marginBottom: 12 }}>
+                  Wrong PIN
+                </Text>
+              )}
+              <Pressable
+                style={[styles.button, !pinInput && styles.buttonDisabled]}
+                onPress={handlePinSubmit}
+                disabled={!pinInput}
+              >
+                <Text style={styles.buttonText}>Enter</Text>
+              </Pressable>
+            </View>
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
   const [screen, setScreen] = useState<Screen>('home');
   const [lobbyCode, setLobbyCode] = useState('');
   const [playerName, setPlayerName] = useState('');
