@@ -93,7 +93,6 @@ export default function App() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
 
-  // Check if already authenticated (session storage for web, memory for native)
   useEffect(() => {
     if (Platform.OS === 'web') {
       try {
@@ -156,6 +155,10 @@ export default function App() {
     );
   }
 
+  return <GameApp />;
+}
+
+function GameApp() {
   const [screen, setScreen] = useState<Screen>('home');
   const [lobbyCode, setLobbyCode] = useState('');
   const [playerName, setPlayerName] = useState('');
