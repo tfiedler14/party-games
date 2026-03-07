@@ -54,7 +54,7 @@ import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl';
 
 // Simple PIN gate — change this PIN to whatever you want
-const ACCESS_PIN = '1234';
+const ACCESS_PIN = '8314';
 const PIN_STORAGE_KEY = 'party-games-access';
 
 // Available games list
