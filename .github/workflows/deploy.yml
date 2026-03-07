@@ -34,8 +34,11 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Add 404 fallback for SPA routing
-        run: cp dist/index.html dist/404.html
+      - name: Add error handler and 404 fallback
+        run: |
+          # Add visible error handler and dark background so errors are visible
+          sed -i 's|</head>|<style>body{background:#1a1a2e;color:white;font-family:sans-serif;}</style><script>window.onerror=function(m,s,l,c,e){document.getElementById("root").innerHTML="<div style=\\"padding:20px\\"><h2>Error</h2><pre>"+m+"\\n"+s+":"+l+"</pre></div>";}</script></head>|' dist/index.html
+          cp dist/index.html dist/404.html
 
       - uses: actions/configure-pages@v4
 
