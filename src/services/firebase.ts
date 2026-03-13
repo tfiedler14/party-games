@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
+import { getRemoteConfig, fetchAndActivate, getValue } from 'firebase/remote-config';
 
 const firebaseConfig = {
   apiKey: "AIzaSyC7nyUWzhnOXIiIGzDGFwLSiJ9OvlNnzWU",
@@ -14,3 +15,22 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const database = getDatabase(app);
+
+// Remote Config for access PIN
+const remoteConfig = getRemoteConfig(app);
+remoteConfig.settings.minimumFetchIntervalMillis = 300000; // 5 min cache
+
+// Default fallback (empty string = no hardcoded PIN in source)
+remoteConfig.defaultConfig = {
+  access_pin: '',
+};
+
+export async function getAccessPin(): Promise<string> {
+  try {
+    await fetchAndActivate(remoteConfig);
+    return getValue(remoteConfig, 'access_pin').asString();
+  } catch (error) {
+    console.error('Failed to fetch remote config:', error);
+    return '';
+  }
+}

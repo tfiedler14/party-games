@@ -14,6 +14,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState, GolfConfig, GolfGameState } from './src/types';
+import { getAccessPin } from './src/services/firebase';
 import {
   createLobby,
   joinLobby,
@@ -69,8 +70,6 @@ import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
 type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf';
 
-// Simple PIN gate — change this PIN to whatever you want
-const ACCESS_PIN = '8314';
 const PIN_STORAGE_KEY = 'party-games-access';
 
 // Available games list
@@ -117,8 +116,11 @@ export default function App() {
   const [hasAccess, setHasAccess] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
+  const [accessPin, setAccessPin] = useState<string | null>(null);
+  const [pinLoading, setPinLoading] = useState(true);
 
   useEffect(() => {
+    // Check session storage first
     if (Platform.OS === 'web') {
       try {
         if (sessionStorage.getItem(PIN_STORAGE_KEY) === 'granted') {
@@ -126,10 +128,16 @@ export default function App() {
         }
       } catch {}
     }
+    // Fetch PIN from Remote Config
+    getAccessPin().then((pin) => {
+      setAccessPin(pin);
+      setPinLoading(false);
+    });
   }, []);
 
   const handlePinSubmit = () => {
-    if (pinInput === ACCESS_PIN) {
+    if (!accessPin) return; // PIN not loaded yet
+    if (pinInput === accessPin) {
       setHasAccess(true);
       setPinError(false);
       if (Platform.OS === 'web') {
@@ -167,9 +175,9 @@ export default function App() {
                 </Text>
               )}
               <Pressable
-                style={[styles.button, !pinInput && styles.buttonDisabled]}
+                style={[styles.button, (!pinInput || pinLoading) && styles.buttonDisabled]}
                 onPress={handlePinSubmit}
-                disabled={!pinInput}
+                disabled={!pinInput || pinLoading}
               >
                 <Text style={styles.buttonText}>Enter</Text>
               </Pressable>
