@@ -16,6 +16,11 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState, GolfConfig, GolfGameState, HorseRacesConfig, HorseRacesGameState } from './src/types';
 import { getAccessPin } from './src/services/firebase';
 import {
+  getAllLobbies,
+  wipeAllLobbies,
+  cleanupGameAndLobby as deleteSingleLobby,
+} from './src/services';
+import {
   createLobby,
   joinLobby,
   subscribeLobby,
@@ -74,7 +79,7 @@ import {
 import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew, Golf, HorseRaces } from './src/components';
 import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
-type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf' | 'horseRaces';
+type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf' | 'horseRaces' | 'admin';
 
 const PIN_STORAGE_KEY = 'party-games-access';
 
@@ -126,6 +131,124 @@ const GAMES: GameInfo[] = [
     available: true,
   },
 ];
+
+function AdminScreen({ onBack }: { onBack: () => void }) {
+  const [lobbies, setLobbies] = useState<{ code: string; playerCount: number; status: string; createdAt: number }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [wiping, setWiping] = useState(false);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const data = await getAllLobbies();
+      setLobbies(data.sort((a, b) => b.createdAt - a.createdAt));
+    } catch (e) {
+      console.error(e);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const handleWipeAll = () => {
+    Alert.alert('Wipe All Lobbies', `Delete all ${lobbies.length} lobbies and their games?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Wipe All', style: 'destructive', onPress: async () => {
+          setWiping(true);
+          const count = await wipeAllLobbies();
+          Alert.alert('Done', `Wiped ${count} lobbies.`);
+          setLobbies([]);
+          setWiping(false);
+        }
+      },
+    ]);
+  };
+
+  const handleDeleteOne = (code: string) => {
+    Alert.alert('Delete Lobby', `Delete lobby ${code}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          await deleteSingleLobby(code);
+          setLobbies(prev => prev.filter(l => l.code !== code));
+        }
+      },
+    ]);
+  };
+
+  const formatAge = (ts: number) => {
+    if (!ts) return 'unknown';
+    const mins = Math.floor((Date.now() - ts) / 60000);
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+        <View style={{ padding: 20 }}>
+          <Pressable onPress={onBack}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </Pressable>
+          <Text style={[styles.screenTitle, { marginTop: 16 }]}>🔧 Admin</Text>
+          <Text style={styles.subtitle}>
+            {loading ? 'Loading...' : `${lobbies.length} lobbies`}
+          </Text>
+        </View>
+
+        <FlatList
+          data={lobbies}
+          keyExtractor={item => item.code}
+          contentContainerStyle={{ padding: 20, paddingTop: 0 }}
+          renderItem={({ item }) => (
+            <View style={[styles.playerCard, { justifyContent: 'space-between' }]}>
+              <View>
+                <Text style={styles.playerName}>{item.code}</Text>
+                <Text style={{ color: '#8b8b9e', fontSize: 13 }}>
+                  {item.playerCount} players · {item.status} · {formatAge(item.createdAt)}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => handleDeleteOne(item.code)}
+                style={{ padding: 8 }}
+              >
+                <Text style={{ color: '#ef4444', fontSize: 16 }}>🗑️</Text>
+              </Pressable>
+            </View>
+          )}
+          ListEmptyComponent={
+            !loading ? (
+              <Text style={{ color: '#8b8b9e', textAlign: 'center', marginTop: 40 }}>
+                No lobbies found
+              </Text>
+            ) : null
+          }
+        />
+
+        <View style={styles.footer}>
+          <Pressable style={styles.button} onPress={refresh} disabled={loading}>
+            <Text style={styles.buttonText}>🔄 Refresh</Text>
+          </Pressable>
+          {lobbies.length > 0 && (
+            <Pressable
+              style={[styles.button, { backgroundColor: '#ef4444' }]}
+              onPress={handleWipeAll}
+              disabled={wiping}
+            >
+              <Text style={styles.buttonText}>
+                {wiping ? 'Wiping...' : '🧹 Wipe All Lobbies'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
+}
 
 export default function App() {
   const [hasAccess, setHasAccess] = useState(false);
@@ -452,6 +575,11 @@ function GameApp() {
     goHome();
   };
 
+  // ADMIN SCREEN
+  if (screen === 'admin') {
+    return <AdminScreen onBack={() => setScreen('home')} />;
+  }
+
   // HOME SCREEN
   if (screen === 'home') {
     return (
@@ -459,7 +587,9 @@ function GameApp() {
         <SafeAreaView style={styles.container}>
           <StatusBar style="light" />
           <View style={styles.content}>
-            <Text style={styles.title}>🎉 Party Games</Text>
+            <Pressable onLongPress={() => setScreen('admin')} delayLongPress={1500}>
+              <Text style={styles.title}>🎉 Party Games</Text>
+            </Pressable>
             <Text style={styles.subtitle}>Get the party started!</Text>
             
             <View style={styles.buttonContainer}>

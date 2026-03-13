@@ -167,6 +167,37 @@ export async function startGame(lobbyCode: string): Promise<void> {
 /**
  * Check if a lobby exists
  */
+/**
+ * Get all lobbies with metadata
+ */
+export async function getAllLobbies(): Promise<{ code: string; playerCount: number; status: string; createdAt: number }[]> {
+  const lobbiesRef = ref(database, 'lobbies');
+  const snapshot = await get(lobbiesRef);
+  if (!snapshot.exists()) return [];
+  
+  const data = snapshot.val();
+  return Object.entries(data).map(([code, lobby]: [string, any]) => ({
+    code,
+    playerCount: lobby.players ? Object.keys(lobby.players).length : 0,
+    status: lobby.status || 'unknown',
+    createdAt: lobby.createdAt || 0,
+  }));
+}
+
+/**
+ * Wipe all lobbies and their associated games
+ */
+export async function wipeAllLobbies(): Promise<number> {
+  const lobbiesRef = ref(database, 'lobbies');
+  const gamesRef = ref(database, 'games');
+  const snapshot = await get(lobbiesRef);
+  const count = snapshot.exists() ? Object.keys(snapshot.val()).length : 0;
+  
+  await remove(lobbiesRef);
+  await remove(gamesRef);
+  return count;
+}
+
 export async function lobbyExists(lobbyCode: string): Promise<boolean> {
   const snapshot = await get(ref(database, `lobbies/${lobbyCode}`));
   return snapshot.exists();
