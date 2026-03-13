@@ -19,7 +19,7 @@ export interface Lobby {
 }
 
 // Available games
-export type GameType = 'irish-poker' | 'fishbowl' | 'golf' | 'ship-captain-crew';
+export type GameType = 'irish-poker' | 'fishbowl' | 'golf' | 'ship-captain-crew' | 'horse-races';
 
 // Game configuration types
 export interface IrishPokerConfig {
@@ -337,7 +337,70 @@ export type GameConfig =
   | { type: 'irish-poker'; settings: IrishPokerConfig }
   | { type: 'fishbowl'; settings: FishbowlConfig }
   | { type: 'golf'; settings: GolfConfig }
-  | { type: 'ship-captain-crew'; settings: ShipCaptainCrewConfig };
+  | { type: 'ship-captain-crew'; settings: ShipCaptainCrewConfig }
+  | { type: 'horse-races'; settings: HorseRacesConfig };
+
+// ============================================
+// HORSE RACES GAME STATE
+// ============================================
+
+export interface HorseRacesConfig {
+  startingChips: number; // default 10
+}
+
+export interface HorseRacesCard {
+  suit: string; // hearts, diamonds, clubs, spades
+  value: number; // 2-12 (J=11, Q=12)
+  label: string; // display label like "J♠"
+}
+
+export interface HorseRacesPlayer {
+  playerId: string;
+  playerName: string;
+  isHost: boolean;
+  hand: HorseRacesCard[];
+  chips: number;
+}
+
+export interface ScratchedHorse {
+  horseNumber: number;
+  penaltyOrder: number; // 1-4, penalty amount
+}
+
+export type HorseRacesPhase = 'scratching' | 'racing' | 'finished';
+
+export interface HorseRacesGameState {
+  lobbyCode: string;
+  config: HorseRacesConfig;
+  
+  players: HorseRacesPlayer[];
+  turnOrder: string[];
+  currentPlayerIndex: number;
+  
+  phase: HorseRacesPhase;
+  
+  // Horse positions: key is horse number (2-12), value is current position (0 = start)
+  horsePositions: { [key: number]: number };
+  
+  // Scratching
+  scratched: ScratchedHorse[];
+  scratchRollCount: number; // how many scratch rolls have happened
+  lastScratchRoll: number | null; // last scratch dice result
+  
+  // Race
+  pot: number;
+  lastRoll: { die1: number; die2: number; sum: number } | null;
+  lastRollPenalty: number | null; // penalty paid on last roll, if any
+  lastRollPlayerName: string | null;
+  
+  // Winner
+  winningHorse: number | null;
+  winnerPlayerIds: string[];
+  winnerPayout: number;
+  
+  startedAt: number;
+  updatedAt: number;
+}
 
 // Game metadata for display
 export interface GameInfo {

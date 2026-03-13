@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState, GolfConfig, GolfGameState } from './src/types';
+import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState, GolfConfig, GolfGameState, HorseRacesConfig, HorseRacesGameState } from './src/types';
 import { getAccessPin } from './src/services/firebase';
 import {
   createLobby,
@@ -64,11 +64,17 @@ import {
   discardDrawnCard as golfDiscardDrawn,
   startNextRound as golfStartNextRound,
   replayGolf,
+  // Horse Races
+  initializeHorseRaces,
+  subscribeToHorseRaces,
+  rollScratchDice,
+  rollRaceDice,
+  replayHorseRaces,
 } from './src/services';
-import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew, Golf } from './src/components';
+import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew, Golf, HorseRaces } from './src/components';
 import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
-type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf';
+type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf' | 'horseRaces';
 
 const PIN_STORAGE_KEY = 'party-games-access';
 
@@ -109,6 +115,15 @@ const GAMES: GameInfo[] = [
     minPlayers: 2,
     maxPlayers: 6,
     available: true
+  },
+  {
+    id: 'horse-races',
+    name: 'Horse Races',
+    emoji: '🏇',
+    description: 'Bet on horses with cards, roll dice to race! Scratched horses mean penalties.',
+    minPlayers: 2,
+    maxPlayers: 10,
+    available: true,
   },
 ];
 
@@ -223,6 +238,8 @@ function GameApp() {
   const [sccState, setSccState] = useState<ShipCaptainCrewGameState | null>(null);
   const [golfConfig, setGolfConfig] = useState<GolfConfig>({ variant: '6-card', totalRounds: 9 });
   const [golfState, setGolfState] = useState<GolfGameState | null>(null);
+  const [horseRacesConfig, setHorseRacesConfig] = useState<HorseRacesConfig>({ startingChips: 10 });
+  const [horseRacesState, setHorseRacesState] = useState<HorseRacesGameState | null>(null);
   const [showDrinkAssigner, setShowDrinkAssigner] = useState(false);
   const [drinksToAssign, setDrinksToAssign] = useState(0);
   const [lastGuessResult, setLastGuessResult] = useState<{ correct: boolean; message: string } | null>(null);
@@ -288,6 +305,9 @@ function GameApp() {
         } else if (updatedLobby.gameType === 'golf') {
           console.log('Game started, redirecting to golf screen');
           setScreen('golf');
+        } else if (updatedLobby.gameType === 'horse-races') {
+          console.log('Game started, redirecting to horse races screen');
+          setScreen('horseRaces');
         }
       }
     });
@@ -358,6 +378,23 @@ function GameApp() {
         return;
       }
       setSccState(state);
+    });
+
+    return () => unsubscribe();
+  }, [screen, lobbyCode]);
+
+  // Subscribe to Horse Races game state updates
+  useEffect(() => {
+    if (screen !== 'horseRaces' || !lobbyCode) return;
+
+    const unsubscribe = subscribeToHorseRaces(lobbyCode, (state) => {
+      if (state === null) {
+        Alert.alert('Game Ended', 'The game has ended.', [
+          { text: 'OK', onPress: () => goHome() }
+        ]);
+        return;
+      }
+      setHorseRacesState(state);
     });
 
     return () => unsubscribe();
@@ -569,6 +606,9 @@ function GameApp() {
         } else if (selectedGame === 'golf') {
           await initializeGolf(lobbyCode, golfConfig);
           setScreen('golf');
+        } else if (selectedGame === 'horse-races') {
+          await initializeHorseRaces(lobbyCode, horseRacesConfig);
+          setScreen('horseRaces');
         }
       } catch (error) {
         console.error('Failed to start game:', error);
@@ -716,6 +756,22 @@ function GameApp() {
                               turnTimeSeconds: Math.min(120, prev.turnTimeSeconds + 15),
                             }))}
                           >
+                            <Text style={styles.numberButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  {isSelected && item.id === 'horse-races' && (
+                    <View style={styles.configSection}>
+                      <View style={styles.configRow}>
+                        <Text style={styles.configLabel}>Starting Chips</Text>
+                        <View style={styles.numberControl}>
+                          <Pressable style={styles.numberButton} onPress={() => setHorseRacesConfig(prev => ({ ...prev, startingChips: Math.max(5, prev.startingChips - 5) }))}>
+                            <Text style={styles.numberButtonText}>-</Text>
+                          </Pressable>
+                          <Text style={styles.numberValue}>{horseRacesConfig.startingChips}</Text>
+                          <Pressable style={styles.numberButton} onPress={() => setHorseRacesConfig(prev => ({ ...prev, startingChips: Math.min(50, prev.startingChips + 5) }))}>
                             <Text style={styles.numberButtonText}>+</Text>
                           </Pressable>
                         </View>
@@ -1099,6 +1155,32 @@ function GameApp() {
             }}
             onReplay={async () => {
               await replayGolf(lobbyCode);
+            }}
+            onExit={() => goHome(isHost)}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  // HORSE RACES GAME SCREEN
+  if (screen === 'horseRaces' && horseRacesState) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" />
+          <HorseRaces
+            gameState={horseRacesState}
+            currentPlayerId={playerId}
+            isHost={isHost}
+            onRollScratch={async () => {
+              await rollScratchDice(lobbyCode, playerId);
+            }}
+            onRollRace={async () => {
+              await rollRaceDice(lobbyCode, playerId);
+            }}
+            onReplay={async () => {
+              await replayHorseRaces(lobbyCode);
             }}
             onExit={() => goHome(isHost)}
           />
