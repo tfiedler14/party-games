@@ -6,3 +6,4 @@ export { DrinkAssigner } from './DrinkAssigner';
 export { RideTheBus } from './RideTheBus';
 export { Fishbowl } from './Fishbowl';
 export { ShipCaptainCrew } from './ShipCaptainCrew';
+export { Golf } from './Golf';

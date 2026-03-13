@@ -205,9 +205,69 @@ export interface FishbowlGameState {
   updatedAt: number;
 }
 
+export type GolfVariant = '4-card' | '6-card' | '9-card';
+
 export interface GolfConfig {
-  numberOfHoles: number;
-  // Future options: mulligan rules, scoring variants, etc.
+  variant: GolfVariant; // 4-card (2x2), 6-card (3x2), 9-card (3x3)
+  totalRounds: number; // default 9
+}
+
+// ============================================
+// GOLF GAME STATE
+// ============================================
+
+export interface GolfCard {
+  card: Card;
+  faceUp: boolean;
+}
+
+export interface GolfPlayerState {
+  playerId: string;
+  playerName: string;
+  isHost: boolean;
+  grid: (GolfCard | null)[]; // flat array: 4, 6, or 9 cards
+  roundScores: number[]; // score per completed round
+  totalScore: number;
+  allFaceUp: boolean; // true when player has flipped all cards
+}
+
+export type GolfPhase =
+  | 'flip-initial'  // players flipping their initial 2 cards
+  | 'playing'       // active gameplay
+  | 'final-turns'   // someone went out, others get one last turn
+  | 'round-end'     // showing round scores
+  | 'game-over';    // all rounds complete
+
+export type GolfAction = 'draw-deck' | 'draw-discard' | 'swap' | 'discard' | 'flip';
+
+export interface GolfGameState {
+  lobbyCode: string;
+  config: GolfConfig;
+  
+  players: GolfPlayerState[];
+  turnOrder: string[];
+  
+  deck: Card[];
+  discardPile: Card[];
+  
+  currentPlayerIndex: number;
+  currentRound: number; // 0-based
+  
+  // Turn state
+  drawnCard: Card | null; // card the current player drew (waiting to swap or discard)
+  drawnFrom: 'deck' | 'discard' | null;
+  
+  // Who triggered end of round
+  knockerId: string | null;
+  finalTurnPlayerIds: string[]; // players who still get a final turn
+  
+  // Initial flip tracking
+  initialFlipsRemaining: Record<string, number>; // playerId -> flips left (start at 2)
+  
+  phase: GolfPhase;
+  
+  startedAt: number;
+  updatedAt: number;
 }
 
 export interface ShipCaptainCrewConfig {

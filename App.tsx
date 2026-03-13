@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState } from './src/types';
+import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState, GolfConfig, GolfGameState } from './src/types';
 import {
   createLobby,
   joinLobby,
@@ -54,11 +54,20 @@ import {
   endRound,
   continueToNextRound,
   replayFishbowl,
+  // Golf
+  initializeGolf,
+  subscribeToGolf,
+  flipInitialCard,
+  drawCard as golfDrawCard,
+  swapCard as golfSwapCard,
+  discardDrawnCard as golfDiscardDrawn,
+  startNextRound as golfStartNextRound,
+  replayGolf,
 } from './src/services';
-import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew } from './src/components';
+import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew, Golf } from './src/components';
 import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
-type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew';
+type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew' | 'golf';
 
 // Simple PIN gate — change this PIN to whatever you want
 const ACCESS_PIN = '8314';
@@ -97,10 +106,10 @@ const GAMES: GameInfo[] = [
     id: 'golf',
     name: 'Golf',
     emoji: '⛳',
-    description: 'Card game where lowest score wins.',
+    description: 'Flip, swap, and match cards for the lowest score! Losers drink.',
     minPlayers: 2,
     maxPlayers: 6,
-    available: false, // Coming soon
+    available: true
   },
 ];
 
@@ -204,6 +213,8 @@ function GameApp() {
   const [gameState, setGameState] = useState<IrishPokerGameState | null>(null);
   const [fishbowlState, setFishbowlState] = useState<FishbowlGameState | null>(null);
   const [sccState, setSccState] = useState<ShipCaptainCrewGameState | null>(null);
+  const [golfConfig, setGolfConfig] = useState<GolfConfig>({ variant: '6-card', totalRounds: 9 });
+  const [golfState, setGolfState] = useState<GolfGameState | null>(null);
   const [showDrinkAssigner, setShowDrinkAssigner] = useState(false);
   const [drinksToAssign, setDrinksToAssign] = useState(0);
   const [lastGuessResult, setLastGuessResult] = useState<{ correct: boolean; message: string } | null>(null);
@@ -230,9 +241,11 @@ function GameApp() {
     setIrishPokerConfig({ includeRideTheBus: true });
     setFishbowlConfig({ slipsPerPlayer: 3, turnTimeSeconds: 60 });
     setSccConfig({ maxRounds: 10 });
+    setGolfConfig({ variant: '6-card', totalRounds: 9 });
     setGameState(null);
     setFishbowlState(null);
     setSccState(null);
+    setGolfState(null);
     setShowDrinkAssigner(false);
     setDrinksToAssign(0);
     setLastGuessResult(null);
@@ -264,6 +277,9 @@ function GameApp() {
         } else if (updatedLobby.gameType === 'ship-captain-crew') {
           console.log('Game started, redirecting to shipCaptainCrew screen');
           setScreen('shipCaptainCrew');
+        } else if (updatedLobby.gameType === 'golf') {
+          console.log('Game started, redirecting to golf screen');
+          setScreen('golf');
         }
       }
     });
@@ -300,6 +316,23 @@ function GameApp() {
         return;
       }
       setFishbowlState(state);
+    });
+
+    return () => unsubscribe();
+  }, [screen, lobbyCode]);
+
+  // Subscribe to Golf game state updates
+  useEffect(() => {
+    if (screen !== 'golf' || !lobbyCode) return;
+
+    const unsubscribe = subscribeToGolf(lobbyCode, (state) => {
+      if (state === null) {
+        Alert.alert('Game Ended', 'The game has ended.', [
+          { text: 'OK', onPress: () => goHome() }
+        ]);
+        return;
+      }
+      setGolfState(state);
     });
 
     return () => unsubscribe();
@@ -525,6 +558,9 @@ function GameApp() {
         } else if (selectedGame === 'ship-captain-crew') {
           await initializeShipCaptainCrew(lobbyCode, sccConfig);
           setScreen('shipCaptainCrew');
+        } else if (selectedGame === 'golf') {
+          await initializeGolf(lobbyCode, golfConfig);
+          setScreen('golf');
         }
       } catch (error) {
         console.error('Failed to start game:', error);
@@ -672,6 +708,36 @@ function GameApp() {
                               turnTimeSeconds: Math.min(120, prev.turnTimeSeconds + 15),
                             }))}
                           >
+                            <Text style={styles.numberButtonText}>+</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                  {isSelected && item.id === 'golf' && (
+                    <View style={styles.configSection}>
+                      <View style={styles.configRow}>
+                        <Text style={styles.configLabel}>Variant</Text>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {(['4-card', '6-card', '9-card'] as const).map(v => (
+                            <Pressable
+                              key={v}
+                              style={[styles.numberButton, golfConfig.variant === v && { backgroundColor: '#e94560' }]}
+                              onPress={() => setGolfConfig(prev => ({ ...prev, variant: v }))}
+                            >
+                              <Text style={[styles.numberButtonText, golfConfig.variant === v && { color: '#fff' }]}>{v}</Text>
+                            </Pressable>
+                          ))}
+                        </View>
+                      </View>
+                      <View style={styles.configRow}>
+                        <Text style={styles.configLabel}>Rounds</Text>
+                        <View style={styles.numberControl}>
+                          <Pressable style={styles.numberButton} onPress={() => setGolfConfig(prev => ({ ...prev, totalRounds: Math.max(1, prev.totalRounds - 1) }))}>
+                            <Text style={styles.numberButtonText}>-</Text>
+                          </Pressable>
+                          <Text style={styles.numberValue}>{golfConfig.totalRounds}</Text>
+                          <Pressable style={styles.numberButton} onPress={() => setGolfConfig(prev => ({ ...prev, totalRounds: Math.min(18, prev.totalRounds + 1) }))}>
                             <Text style={styles.numberButtonText}>+</Text>
                           </Pressable>
                         </View>
@@ -990,6 +1056,41 @@ function GameApp() {
             }}
             onReplay={async () => {
               await replayShipCaptainCrew(lobbyCode);
+            }}
+            onExit={() => goHome(isHost)}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  // GOLF GAME SCREEN
+  if (screen === 'golf' && golfState) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" />
+          <Golf
+            gameState={golfState}
+            currentPlayerId={playerId}
+            isHost={isHost}
+            onFlipInitial={async (cardIndex) => {
+              await flipInitialCard(lobbyCode, playerId, cardIndex);
+            }}
+            onDrawCard={async (source) => {
+              await golfDrawCard(lobbyCode, playerId, source);
+            }}
+            onSwapCard={async (cardIndex) => {
+              await golfSwapCard(lobbyCode, playerId, cardIndex);
+            }}
+            onDiscardDrawn={async (flipIndex) => {
+              await golfDiscardDrawn(lobbyCode, playerId, flipIndex);
+            }}
+            onStartNextRound={async () => {
+              await golfStartNextRound(lobbyCode);
+            }}
+            onReplay={async () => {
+              await replayGolf(lobbyCode);
             }}
             onExit={() => goHome(isHost)}
           />
