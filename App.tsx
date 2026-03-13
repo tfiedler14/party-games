@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState } from './src/types';
+import { Player, Lobby, GameType, GameInfo, GameConfig, IrishPokerConfig, IrishPokerGameState, FishbowlConfig, FishbowlGameState, ShipCaptainCrewConfig, ShipCaptainCrewGameState } from './src/types';
 import {
   createLobby,
   joinLobby,
@@ -32,6 +32,13 @@ import {
   submitRiderGuess,
   continueRiding,
   replayGame,
+  // Ship Captain Crew
+  initializeShipCaptainCrew,
+  subscribeToShipCaptainCrew,
+  rollDice as sccRollDice,
+  toggleDieLock as sccToggleDieLock,
+  endTurn as sccEndTurn,
+  replayShipCaptainCrew,
   // Fishbowl
   initializeFishbowl,
   subscribeToFishbowl,
@@ -48,10 +55,10 @@ import {
   continueToNextRound,
   replayFishbowl,
 } from './src/services';
-import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl } from './src/components';
+import { PlayerHand, GuessButtons, Scoreboard, DrinkAssigner, RideTheBus, Fishbowl, ShipCaptainCrew } from './src/components';
 import { ROUND_NAMES, RoundGuess } from './src/utils/cards';
 
-type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl';
+type Screen = 'home' | 'host' | 'join' | 'lobby' | 'gameSelect' | 'irishPoker' | 'fishbowl' | 'shipCaptainCrew';
 
 // Simple PIN gate — change this PIN to whatever you want
 const ACCESS_PIN = '8314';
@@ -75,6 +82,15 @@ const GAMES: GameInfo[] = [
     description: 'Team word-guessing game with 4 rounds of increasing difficulty.',
     minPlayers: 4,
     maxPlayers: 20,
+    available: true,
+  },
+  {
+    id: 'ship-captain-crew',
+    name: 'Ship Captain Crew',
+    emoji: '🚢',
+    description: 'Roll dice to find your Ship (6), Captain (5), and Crew (4) — then maximize your cargo! Lowest score drinks.',
+    minPlayers: 2,
+    maxPlayers: 10,
     available: true,
   },
   {
@@ -180,10 +196,14 @@ function GameApp() {
     slipsPerPlayer: 3,
     turnTimeSeconds: 60,
   });
+  const [sccConfig, setSccConfig] = useState<ShipCaptainCrewConfig>({
+    maxRounds: 10,
+  });
 
   // Game states
   const [gameState, setGameState] = useState<IrishPokerGameState | null>(null);
   const [fishbowlState, setFishbowlState] = useState<FishbowlGameState | null>(null);
+  const [sccState, setSccState] = useState<ShipCaptainCrewGameState | null>(null);
   const [showDrinkAssigner, setShowDrinkAssigner] = useState(false);
   const [drinksToAssign, setDrinksToAssign] = useState(0);
   const [lastGuessResult, setLastGuessResult] = useState<{ correct: boolean; message: string } | null>(null);
@@ -209,8 +229,10 @@ function GameApp() {
     setSelectedGame(null);
     setIrishPokerConfig({ includeRideTheBus: true });
     setFishbowlConfig({ slipsPerPlayer: 3, turnTimeSeconds: 60 });
+    setSccConfig({ maxRounds: 10 });
     setGameState(null);
     setFishbowlState(null);
+    setSccState(null);
     setShowDrinkAssigner(false);
     setDrinksToAssign(0);
     setLastGuessResult(null);
@@ -239,6 +261,9 @@ function GameApp() {
         } else if (updatedLobby.gameType === 'fishbowl') {
           console.log('Game started, redirecting to fishbowl screen');
           setScreen('fishbowl');
+        } else if (updatedLobby.gameType === 'ship-captain-crew') {
+          console.log('Game started, redirecting to shipCaptainCrew screen');
+          setScreen('shipCaptainCrew');
         }
       }
     });
@@ -275,6 +300,23 @@ function GameApp() {
         return;
       }
       setFishbowlState(state);
+    });
+
+    return () => unsubscribe();
+  }, [screen, lobbyCode]);
+
+  // Subscribe to Ship Captain Crew game state updates
+  useEffect(() => {
+    if (screen !== 'shipCaptainCrew' || !lobbyCode) return;
+
+    const unsubscribe = subscribeToShipCaptainCrew(lobbyCode, (state) => {
+      if (state === null) {
+        Alert.alert('Game Ended', 'The game has ended.', [
+          { text: 'OK', onPress: () => goHome() }
+        ]);
+        return;
+      }
+      setSccState(state);
     });
 
     return () => unsubscribe();
@@ -480,6 +522,9 @@ function GameApp() {
         } else if (selectedGame === 'fishbowl') {
           await initializeFishbowl(lobbyCode, fishbowlConfig);
           setScreen('fishbowl');
+        } else if (selectedGame === 'ship-captain-crew') {
+          await initializeShipCaptainCrew(lobbyCode, sccConfig);
+          setScreen('shipCaptainCrew');
         }
       } catch (error) {
         console.error('Failed to start game:', error);
@@ -916,6 +961,35 @@ function GameApp() {
             }}
             onReplay={async () => {
               await replayFishbowl(lobbyCode);
+            }}
+            onExit={() => goHome(isHost)}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
+
+  // SHIP CAPTAIN CREW GAME SCREEN
+  if (screen === 'shipCaptainCrew' && sccState) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.container}>
+          <StatusBar style="light" />
+          <ShipCaptainCrew
+            gameState={sccState}
+            currentPlayerId={playerId}
+            isHost={isHost}
+            onRollDice={async () => {
+              await sccRollDice(lobbyCode, playerId);
+            }}
+            onToggleDieLock={async (dieIndex) => {
+              await sccToggleDieLock(lobbyCode, playerId, dieIndex);
+            }}
+            onEndTurn={async () => {
+              await sccEndTurn(lobbyCode, playerId);
+            }}
+            onReplay={async () => {
+              await replayShipCaptainCrew(lobbyCode);
             }}
             onExit={() => goHome(isHost)}
           />

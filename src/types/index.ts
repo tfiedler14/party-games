@@ -19,7 +19,7 @@ export interface Lobby {
 }
 
 // Available games
-export type GameType = 'irish-poker' | 'fishbowl' | 'golf';
+export type GameType = 'irish-poker' | 'fishbowl' | 'golf' | 'ship-captain-crew';
 
 // Game configuration types
 export interface IrishPokerConfig {
@@ -210,10 +210,74 @@ export interface GolfConfig {
   // Future options: mulligan rules, scoring variants, etc.
 }
 
+export interface ShipCaptainCrewConfig {
+  maxRounds: number; // max rounds before forced end (default 10)
+}
+
+// ============================================
+// SHIP CAPTAIN CREW GAME STATE
+// ============================================
+
+export interface SCCDie {
+  value: number; // 1-6
+  locked: boolean; // locked by player between rolls
+  lockedAs: 'ship' | 'captain' | 'crew' | 'cargo' | null; // what it's locked as
+}
+
+export interface SCCPlayerState {
+  playerId: string;
+  playerName: string;
+  isHost: boolean;
+  // Current turn state (only meaningful for active player)
+  dice: SCCDie[];
+  rollsLeft: number; // 0-3
+  hasShip: boolean;
+  hasCaptain: boolean;
+  hasCrew: boolean;
+  cargo: number | null; // sum of remaining 2 dice if ship+captain+crew found, null otherwise
+  // Round results
+  roundScore: number | null; // cargo score for this round, null if didn't get 6-5-4
+  // Overall
+  totalScore: number; // cumulative across rounds
+  isBustThisRound: boolean; // true if they didn't get 6-5-4
+}
+
+export type SCCPhase = 
+  | 'rolling' // active player is rolling
+  | 'round-end' // round finished, showing results
+  | 'game-over'; // game complete
+
+export interface ShipCaptainCrewGameState {
+  lobbyCode: string;
+  config: ShipCaptainCrewConfig;
+  
+  players: SCCPlayerState[];
+  turnOrder: string[];
+  
+  currentPlayerIndex: number;
+  currentRound: number;
+  
+  // Chase mechanic: once someone scores, others get one more turn
+  highScore: number | null; // current high score to beat
+  highScorerId: string | null; // who set it
+  chaseMode: boolean; // true = someone scored, rest get one turn
+  chaseTurnsRemaining: string[]; // player IDs who still get their chase turn
+  
+  phase: SCCPhase;
+  
+  // Drink result
+  loserId: string | null; // player who has to drink
+  loserName: string | null;
+  
+  startedAt: number;
+  updatedAt: number;
+}
+
 export type GameConfig = 
   | { type: 'irish-poker'; settings: IrishPokerConfig }
   | { type: 'fishbowl'; settings: FishbowlConfig }
-  | { type: 'golf'; settings: GolfConfig };
+  | { type: 'golf'; settings: GolfConfig }
+  | { type: 'ship-captain-crew'; settings: ShipCaptainCrewConfig };
 
 // Game metadata for display
 export interface GameInfo {

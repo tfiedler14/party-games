@@ -5,3 +5,4 @@ export { Scoreboard } from './Scoreboard';
 export { DrinkAssigner } from './DrinkAssigner';
 export { RideTheBus } from './RideTheBus';
 export { Fishbowl } from './Fishbowl';
+export { ShipCaptainCrew } from './ShipCaptainCrew';
