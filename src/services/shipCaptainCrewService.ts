@@ -147,6 +147,15 @@ export async function rollDice(
   // Auto-detect ship/captain/crew in order
   autoLockSCC(player);
 
+  // Auto-end turn if no rolls left and didn't get full SCC
+  if (player.rollsLeft === 0 && !(player.hasShip && player.hasCaptain && player.hasCrew)) {
+    player.roundScore = null;
+    player.isBustThisRound = true;
+    advanceToNextPlayer(state, playerId);
+    await set(gameRef, state);
+    return;
+  }
+
   await update(gameRef, { players: state.players, updatedAt: Date.now() });
 }
 
@@ -255,7 +264,6 @@ export async function endTurn(
     // Enter chase mode if not already
     if (!state.chaseMode) {
       state.chaseMode = true;
-      // Everyone except this player gets one more turn
       state.chaseTurnsRemaining = state.turnOrder.filter(id => id !== playerId);
     }
   } else {
@@ -263,31 +271,30 @@ export async function endTurn(
     player.isBustThisRound = true;
   }
 
-  // Determine next player
+  advanceToNextPlayer(state, playerId);
+
+  await set(gameRef, state);
+}
+
+function advanceToNextPlayer(state: ShipCaptainCrewGameState, playerId: string): void {
   if (state.chaseMode) {
-    // Remove current player from chase turns
     state.chaseTurnsRemaining = state.chaseTurnsRemaining.filter(id => id !== playerId);
     
     if (state.chaseTurnsRemaining.length === 0) {
-      // Chase is over - determine loser
       finishGame(state);
     } else {
-      // Next chase player
       const nextId = state.chaseTurnsRemaining[0];
       state.currentPlayerIndex = state.turnOrder.indexOf(nextId);
       resetPlayerForTurn(state.players.find(p => p.playerId === nextId)!);
     }
   } else {
-    // Normal round-robin
     state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.turnOrder.length;
     
-    // Check if we've gone all the way around with no score
     if (state.currentPlayerIndex === 0) {
       state.currentRound += 1;
       if (state.currentRound >= state.config.maxRounds) {
         finishGame(state);
       } else {
-        // Reset all players for new round
         state.players.forEach(p => {
           p.roundScore = null;
           p.isBustThisRound = false;
@@ -299,8 +306,7 @@ export async function endTurn(
       resetPlayerForTurn(state.players.find(p => p.playerId === state.turnOrder[state.currentPlayerIndex])!);
     }
   }
-
-  await set(gameRef, state);
+  state.updatedAt = Date.now();
 }
 
 function resetPlayerForTurn(player: SCCPlayerState): void {
