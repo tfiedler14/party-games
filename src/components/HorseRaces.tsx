@@ -96,7 +96,7 @@ export function HorseRaces({ gameState, currentPlayerId, isHost, onRollScratch, 
       {gameState.phase === 'scratching' && gameState.lastScratchRoll != null && (
         <View style={s.rollBar}>
           <Text style={s.rollText}>
-            🎲 Rolled {gameState.lastScratchRoll} — {scratchedNumbers.has(gameState.lastScratchRoll) ? `Horse #${gameState.lastScratchRoll} scratched!` : 'Already scratched, re-roll!'}
+            🎲 Rolled {gameState.lastScratchRoll} — {gameState.lastScratchWasDuplicate ? 'Already scratched, re-roll!' : `Horse #${gameState.lastScratchRoll} scratched!`}
           </Text>
         </View>
       )}

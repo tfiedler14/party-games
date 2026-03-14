@@ -113,7 +113,7 @@ function PlayerGrid({ player, variant, isActive, isCurrent, onCardPress, drawnCa
           </View>
         ))}
       </View>
-      {player.totalScore > 0 && (
+      {player.roundScores.length > 0 && (
         <Text style={s.totalScore}>Total: {player.totalScore}</Text>
       )}
     </View>

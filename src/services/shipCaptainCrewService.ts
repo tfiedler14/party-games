@@ -264,7 +264,13 @@ export async function endTurn(
     // Enter chase mode if not already
     if (!state.chaseMode) {
       state.chaseMode = true;
-      state.chaseTurnsRemaining = state.turnOrder.filter(id => id !== playerId);
+      // Order chase turns starting from the player AFTER the scorer in turn order
+      const scorerIdx = state.turnOrder.indexOf(playerId);
+      const reordered: string[] = [];
+      for (let i = 1; i < state.turnOrder.length; i++) {
+        reordered.push(state.turnOrder[(scorerIdx + i) % state.turnOrder.length]);
+      }
+      state.chaseTurnsRemaining = reordered;
     }
   } else {
     player.roundScore = null;
@@ -331,13 +337,17 @@ function finishGame(state: ShipCaptainCrewGameState): void {
   
   let loser: SCCPlayerState;
   if (busters.length > 0) {
-    // Pick random buster (or the one with worst overall)
+    // All busters are equally bad - pick the first in turn order
+    // (In practice they all drink, but we mark one as the primary loser)
     loser = busters[0];
-  } else {
+  } else if (scorers.length > 0) {
     // All scored - lowest cargo loses
     loser = scorers.reduce((worst, p) => 
       (p.roundScore! < worst.roundScore!) ? p : worst
     );
+  } else {
+    // Shouldn't happen, but fallback
+    loser = state.players[0];
   }
   
   state.loserId = loser.playerId;

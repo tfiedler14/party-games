@@ -493,7 +493,7 @@ export async function assignDrinks(
     throw new Error('Game not found');
   }
 
-  const gameState = snapshot.val() as IrishPokerGameState;
+  const gameState = normalizeGameState(snapshot.val());
   const targetPlayer = gameState.players.find(p => p.playerId === toPlayerId);
 
   if (!targetPlayer) {

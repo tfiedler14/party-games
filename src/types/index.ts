@@ -386,6 +386,7 @@ export interface HorseRacesGameState {
   scratched: ScratchedHorse[];
   scratchRollCount: number; // how many scratch rolls have happened
   lastScratchRoll: number | null; // last scratch dice result
+  lastScratchWasDuplicate: boolean; // whether the last scratch roll was a duplicate
   
   // Race
   pot: number;

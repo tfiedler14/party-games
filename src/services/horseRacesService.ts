@@ -83,6 +83,7 @@ function normalizeState(state: any): HorseRacesGameState {
     lastRollPenalty: state.lastRollPenalty ?? null,
     lastRollPlayerName: state.lastRollPlayerName ?? null,
     lastScratchRoll: state.lastScratchRoll ?? null,
+    lastScratchWasDuplicate: state.lastScratchWasDuplicate ?? false,
     winningHorse: state.winningHorse ?? null,
     winnerPayout: state.winnerPayout ?? 0,
     pot: state.pot ?? 0,
@@ -132,6 +133,7 @@ export async function initializeHorseRaces(lobbyCode: string, config: HorseRaces
     scratched: [],
     scratchRollCount: 0,
     lastScratchRoll: null,
+    lastScratchWasDuplicate: false,
     pot: 0,
     lastRoll: null,
     lastRollPenalty: null,
@@ -178,6 +180,7 @@ export async function rollScratchDice(lobbyCode: string, playerId: string): Prom
   
   if (!scratchedNumbers.includes(roll.sum)) {
     // New scratch
+    updates.lastScratchWasDuplicate = false;
     const newScratched: ScratchedHorse = {
       horseNumber: roll.sum,
       penaltyOrder: state.scratched.length + 1,
@@ -203,6 +206,7 @@ export async function rollScratchDice(lobbyCode: string, playerId: string): Prom
     }
   } else {
     // Already scratched, re-roll needed - next player
+    updates.lastScratchWasDuplicate = true;
     updates.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.turnOrder.length;
   }
   
@@ -235,10 +239,10 @@ export async function rollRaceDice(lobbyCode: string, playerId: string): Promise
     updates.lastRollPenalty = penalty;
     updates.pot = state.pot + penalty;
     
-    // Deduct from player's chips
+    // Deduct from player's chips (floor at 0)
     const updatedPlayers = state.players.map(p => {
       if (p.playerId === playerId) {
-        return { ...p, chips: p.chips - penalty };
+        return { ...p, chips: Math.max(0, p.chips - penalty) };
       }
       return p;
     });
