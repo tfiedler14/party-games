@@ -1059,23 +1059,21 @@ function GameApp() {
             ))}
           </ScrollView>
 
-          {/* Guess Buttons (only for current player) */}
-          {isMyTurn && gameState.phase === 'main' && (
-            <GuessButtons
-              roundType={gameState.roundType}
-              roundIndex={gameState.currentRound}
-              onGuess={handleGuess}
-            />
-          )}
-
-          {/* Scoreboard Toggle */}
-          <View style={styles.gameFooter}>
+          {/* Guess Buttons + Scoreboard */}
+          <ScrollView style={styles.gameFooter} contentContainerStyle={{ paddingBottom: 16 }}>
+            {isMyTurn && gameState.phase === 'main' && (
+              <GuessButtons
+                roundType={gameState.roundType}
+                roundIndex={gameState.currentRound}
+                onGuess={handleGuess}
+              />
+            )}
             <Scoreboard
               players={gameState.players}
               currentPlayerId={playerId}
               onRecordDrink={handleRecordDrink}
             />
-          </View>
+          </ScrollView>
 
           {/* Drink Assigner Modal */}
           <DrinkAssigner
@@ -1750,7 +1748,8 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#2a2a4a',
-    maxHeight: 280,
+    maxHeight: 320,
+    flexShrink: 1,
   },
   gameCompleteOverlay: {
     position: 'absolute',
